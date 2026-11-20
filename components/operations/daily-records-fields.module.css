@@ -1,0 +1,6 @@
+.field { display: flex; flex-direction: column; gap: 8px; min-width: 0; color: #39473e; font-size: 13px; font-weight: 600; }
+.field > span { display: block; }
+.control { width: 100%; min-width: 0; height: 44px; box-sizing: border-box; padding: 10px 13px; border: 1px solid #dce4dc; border-radius: 10px; background: #fff; color: #24352a; font: inherit; font-size: 14px; font-weight: 400; outline: none; transition: border-color .15s ease, box-shadow .15s ease; }
+.control:focus { border-color: #1c634e; box-shadow: 0 0 0 3px rgba(28,99,78,.12); }
+.control::placeholder { color: #98a39a; }
+.control:disabled { background: #f3f5f1; color: #6e7a71; cursor: not-allowed; }
