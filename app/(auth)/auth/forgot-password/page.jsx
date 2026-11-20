@@ -1,0 +1,6 @@
+import AuthForm from '@/components/auth/auth-forms'
+
+export const metadata = { title: 'Reset your password' }
+export default function ForgotPasswordPage() {
+  return <AuthForm mode="forgot" />
+}

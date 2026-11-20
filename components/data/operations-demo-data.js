@@ -1,0 +1,155 @@
+export const recordHistory = [
+  {
+    date: '15 Nov 2026',
+    flock: 'BR-2026-001',
+    location: 'House A · Pen A1',
+    feed: '16 kg',
+    water: '28 L',
+    deaths: 1,
+    status: 'Complete',
+  },
+  {
+    date: '15 Nov 2026',
+    flock: 'LY-2026-002',
+    location: 'House B · Pen B1',
+    feed: '12 kg',
+    water: '21 L',
+    deaths: 0,
+    status: 'Complete',
+  },
+  {
+    date: '14 Nov 2026',
+    flock: 'BR-2026-001',
+    location: 'House A · Pen A2',
+    feed: '14 kg',
+    water: '25 L',
+    deaths: 0,
+    status: 'Complete',
+  },
+]
+
+export const movementHistory = [
+  {
+    date: '16 Nov 2026 · 09:40',
+    type: 'Transfer',
+    flock: 'BR-2026-001',
+    from: 'House A · Pen A1',
+    to: 'House A · Pen A2',
+    birds: 12,
+    reason: 'Balance pen occupancy',
+  },
+  {
+    date: '12 Nov 2026 · 15:15',
+    type: 'Sale',
+    flock: 'BR-2026-001',
+    from: 'House A · Pen A2',
+    to: 'External buyer',
+    birds: 2,
+    reason: 'Bird sale',
+  },
+  {
+    date: '10 Nov 2026 · 08:30',
+    type: 'Mortality',
+    flock: 'BR-2026-001',
+    from: 'House A · Pen A1',
+    to: 'Removed from flock',
+    birds: 1,
+    reason: 'Mortality adjustment',
+  },
+]
+
+export const inventoryRows = [
+  {
+    item: 'Broiler starter pellets',
+    category: 'Feed',
+    onHand: '8 bags',
+    unit: '50 kg bag',
+    reorder: '5 bags',
+    status: 'In stock',
+    tone: 'sage',
+  },
+  {
+    item: 'Broiler grower mash',
+    category: 'Feed',
+    onHand: '3 bags',
+    unit: '50 kg bag',
+    reorder: '5 bags',
+    status: 'Low stock',
+    tone: 'gold',
+  },
+  {
+    item: 'Layer concentrate',
+    category: 'Feed',
+    onHand: '6 bags',
+    unit: '25 kg bag',
+    reorder: '3 bags',
+    status: 'In stock',
+    tone: 'sage',
+  },
+  {
+    item: 'Poultry vitamins',
+    category: 'Health supplies',
+    onHand: '4 bottles',
+    unit: '1 L bottle',
+    reorder: '2 bottles',
+    status: 'In stock',
+    tone: 'sage',
+  },
+  {
+    item: 'Disinfectant',
+    category: 'Biosecurity',
+    onHand: '1 container',
+    unit: '5 L container',
+    reorder: '2 containers',
+    status: 'Low stock',
+    tone: 'gold',
+  },
+]
+
+export const healthRecords = [
+  {
+    date: '14 Nov 2026',
+    flock: 'BR-2026-001',
+    pen: 'House A · Pen A1',
+    observation: 'Reduced activity observed',
+    affected: '3 birds',
+    followup: 'Monitor',
+    tone: 'gold',
+  },
+  {
+    date: '09 Nov 2026',
+    flock: 'LY-2026-002',
+    pen: 'House B · Pen B1',
+    observation: 'Routine flock check',
+    affected: '0 birds',
+    followup: 'Closed',
+    tone: 'sage',
+  },
+]
+
+export const vaccines = [
+  {
+    activity: 'Newcastle disease · reference item',
+    category: 'Broiler',
+    age: 'Example schedule',
+    planned: '18 Nov 2026',
+    status: 'Upcoming',
+    tone: 'gold',
+  },
+  {
+    activity: 'Flock health review',
+    category: 'Layer',
+    age: '16 weeks',
+    planned: '20 Nov 2026',
+    status: 'Planned',
+    tone: 'sage',
+  },
+  {
+    activity: 'Vaccination history review',
+    category: 'Broiler',
+    age: '28 days',
+    planned: '12 Nov 2026',
+    status: 'Completed',
+    tone: 'blue',
+  },
+]
