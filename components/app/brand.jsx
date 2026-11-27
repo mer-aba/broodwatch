@@ -8,7 +8,7 @@ export default function Brand() {
         <Leaf size={20} />
       </span>
       <span className="brand-name">
-        brood<span>watch</span>
+        Brood<span>Watch</span>
         <small>FLOCK MANAGEMENT</small>
       </span>
     </Link>

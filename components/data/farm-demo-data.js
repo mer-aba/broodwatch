@@ -20,7 +20,7 @@ export const navGroups = [
     label: 'ADVISORY',
     items: ['MAAIF Recommendations', 'Knowledge Library', 'BroodWatch Assistant'],
   },
-  { label: 'BUSINESS', items: ['Inventory', 'Expenses & Sales', 'Reports'] },
+  { label: 'BUSINESS', items: [ 'Reports'] },
   {
     label: 'ADMINISTRATION',
     items: ['Devices', 'Farm Settings', 'User Management', 'Evaluation Laboratory'],

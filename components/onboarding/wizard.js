@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { ArrowLeft, ArrowRight, Check, CircleHelp, House, MapPin, Plus, Sprout } from 'lucide-react'
+import { BREED_CATALOGUE, CATEGORY_OPTIONS, getBreed, getReferenceDescription } from './breed-catalogue'
 
 const steps = [
   'Farmer profile',
@@ -16,6 +17,16 @@ const steps = [
   'Review and finish',
 ]
 const optionalSteps = [2, 3, 4, 5]
+const CATEGORY_CODES = { Broiler: 'BR', Layer: 'LY', 'Dual-purpose': 'DP', Indigenous: 'IN', Breeder: 'BD' }
+function farmInitials(name) {
+  const words = String(name || '').trim().split(/\s+/).filter(Boolean)
+  return (words.map(w => w[0]).join('').slice(0, 4) || 'FARM').toUpperCase().replace(/[^A-Z]/g, '') || 'FARM'
+}
+function previewNumber(name, category, index) {
+  const d = new Date()
+  const stamp = `${String(d.getFullYear()).slice(-2)}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`
+  return `${stamp}-${farmInitials(name)}-${CATEGORY_CODES[category] || 'OT'}-${String(index+1).padStart(3,'0')}`
+}
 
 function makeHouse(index) {
   const letter = String.fromCharCode(65 + index)
@@ -58,12 +69,14 @@ export default function Onboarding() {
     {
       number: '',
       category: 'Broiler',
-      breed: '',
+      breed: 'Cobb 500',
       initialCount: '',
       hatchDate: '',
       arrivalDate: '',
       supplier: '',
       feedingProgramme: '',
+      productionPurpose: 'Meat',
+      feedForm: 'Pellet',
     },
   ])
   const [selectedBatch, setSelectedBatch] = useState(0)
@@ -183,19 +196,28 @@ export default function Onboarding() {
     )
   }
 
+  function changeBatchCategory(index, category) {
+    const firstBreed = BREED_CATALOGUE.find((item) => item.category === category)
+    setBatches((current) => current.map((batch, i) => i === index
+      ? { ...batch, category, breed: firstBreed?.name || '',
+          productionPurpose: category === 'Layer' ? 'Eggs' : category === 'Breeder' ? 'Breeding' : category === 'Dual-purpose' ? 'Dual-purpose' : 'Meat' }
+      : batch))
+  }
+
   function addBatch() {
-    const nextNumber = batches.length + 1
     setBatches((current) => [
       ...current,
       {
-        number: `BR-${new Date().getFullYear()}-${String(nextNumber).padStart(3, '0')}`,
+        number: '',
         category: 'Broiler',
-        breed: '',
+        breed: 'Cobb 500',
         initialCount: '',
         hatchDate: '',
         arrivalDate: '',
         supplier: '',
         feedingProgramme: '',
+       productionPurpose: 'Meat',
+       feedForm: 'Pellet',
       },
     ])
   }
@@ -225,11 +247,10 @@ export default function Onboarding() {
     if (activeHouses.some((house) => house.pens.some((pen) =>
       !pen.name.trim() || !Number.isInteger(Number(pen.capacity)) || Number(pen.capacity) <= 0)))
       return 'Each pen needs a name and positive whole-number capacity.'
-    if (activeBatches.some((batch) => !batch.number.trim() ||
-      !Number.isInteger(Number(batch.initialCount)) || Number(batch.initialCount) <= 0))
-      return 'Each batch needs a number and positive whole-number bird count.'
-    if (new Set(activeBatches.map((batch) => batch.number.trim())).size !== activeBatches.length)
-      return 'Batch numbers must be unique.'
+    if (activeBatches.some((batch) => !getBreed(batch.category, batch.breed)))
+      return 'Choose a breed from the catalogue for every batch.'
+    if (activeBatches.some((batch) => !Number.isInteger(Number(batch.initialCount)) || Number(batch.initialCount) <= 0))
+      return 'Each batch needs a positive whole-number bird count.'
     if (!skipped.includes(5)) {
       const occupied = {}
       for (let bi = 0; bi < activeBatches.length; bi++) {
@@ -242,7 +263,7 @@ export default function Onboarding() {
           if (occupied[pen.key] > pen.capacity) return `${pen.label} exceeds capacity.`
         }
         if (assigned > Number(activeBatches[bi].initialCount))
-          return `Batch ${activeBatches[bi].number} has too many birds assigned.`
+          return `Batch ${previewNumber(farmName, activeBatches[bi].category, bi)} has too many birds assigned.`
       }
     }
     return ''
@@ -269,7 +290,7 @@ export default function Onboarding() {
         profile: { fullName: farmerName.trim(), phone: phone.trim(), preferredLanguage },
         farm: { name: farmName.trim(), farmType, district: district.trim(), town: town.trim(), preferredUnits },
         houses: activeHouses,
-        batches: activeBatches,
+        batches: activeBatches.map((batch, index) => ({ ...batch, number: previewNumber(farmName, batch.category, index), feedingProgramme: batch.feedingProgramme || `${batch.feedForm || 'Pellet'} feed` })),
         placements: placementRows,
       }
       const { data: farmId, error } = await supabase.rpc('complete_farm_onboarding', {
@@ -584,27 +605,39 @@ export default function Onboarding() {
                     <div className="house-entry-fields">
                       <Field label="Batch number">
                         <input
-                          value={batch.number}
-                          onChange={(event) => updateBatch(index, 'number', event.target.value)}
+                          value={previewNumber(farmName, batch.category, index)}
+                          readOnly
+                          title="Preview only; Supabase assigns the final batch number"
                         />
                       </Field>
                       <div className="field-row">
                         <Field label="Production category">
-                          <select
-                            value={batch.category}
-                            onChange={(event) => updateBatch(index, 'category', event.target.value)}
-                          >
-                            <option>Broiler</option>
-                            <option>Layer</option>
+                          <select value={batch.category} onChange={(event) => changeBatchCategory(index, event.target.value)}>
+                            {CATEGORY_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                           </select>
                         </Field>
                         <Field label="Breed or strain">
-                          <input
-                            value={batch.breed}
-                            onChange={(event) => updateBatch(index, 'breed', event.target.value)}
-                            placeholder="e.g. Cobb 500"
-                          />
+                          <select value={batch.breed} onChange={(event) => updateBatch(index, 'breed', event.target.value)}>
+                            {BREED_CATALOGUE.filter((item) => item.category === batch.category).map((item) =>
+                              <option key={item.name} value={item.name}>{item.name}</option>)}
+                          </select>
                         </Field>
+                      </div>
+                      <div className="field-row">
+                        <Field label="Production purpose">
+                          <select value={batch.productionPurpose || 'Meat'} onChange={(event) => updateBatch(index, 'productionPurpose', event.target.value)}>
+                            <option>Meat</option><option>Eggs</option><option>Dual-purpose</option><option>Breeding</option>
+                          </select>
+                        </Field>
+                        <Field label="Feed form">
+                          <select value={batch.feedForm || 'Pellet'} onChange={(event) => updateBatch(index, 'feedForm', event.target.value)}>
+                            <option>Pellet</option><option>Mash</option><option>Crumble</option><option>Mixed</option><option>Other</option>
+                          </select>
+                        </Field>
+                      </div>
+                      <div className="inline-hint">
+                        <CircleHelp size={15} />
+                        <span><strong>MAAIF reference mapping:</strong> {getReferenceDescription(batch.category, batch.breed)}. The selected breed does not automatically imply a breed-specific MAAIF growth curve.</span>
                       </div>
                       <div className="field-row">
                         <Field label="Hatch date">
@@ -653,7 +686,7 @@ export default function Onboarding() {
                   <Plus size={15} /> Add another batch
                 </button>
                 <p className="inline-hint">
-                  <CircleHelp size={15} /> Batch details will be saved to your farm when setup finishes.
+                  <CircleHelp size={15} /> Batch IDs shown are previews. Supabase generates permanent, collision-safe numbers when saving. MAAIF references depend on category, breed, age and feeding programme.
                 </p>
               </div>
             )}
@@ -669,7 +702,7 @@ export default function Onboarding() {
                   >
                     {batches.map((batch, index) => (
                       <option key={index} value={index}>
-                        {batch.number} · {batch.category}
+                        {previewNumber(farmName, batch.category, index)} · {batch.category}
                       </option>
                     ))}
                   </select>
@@ -680,7 +713,7 @@ export default function Onboarding() {
                   </span>
                   <div>
                     <strong>
-                      {batches[selectedBatch]?.number} · {batches[selectedBatch]?.category}
+                      {previewNumber(farmName, batches[selectedBatch]?.category, selectedBatch)} · {batches[selectedBatch]?.category}
                     </strong>
                     <small>{initialBirds} birds to place</small>
                   </div>

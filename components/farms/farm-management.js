@@ -19,6 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { BREED_CATALOGUE, CATEGORY_OPTIONS, getReferenceDescription } from '../onboarding/breed-catalogue'
 
 const blank = {
   name: '',
@@ -31,7 +32,9 @@ const blank = {
   capacity: '100',
   batch_number: '',
   category: 'Broiler',
-  breed: '',
+  breed: 'Cobb 500',
+  production_purpose: 'Meat',
+  feed_form: 'Pellet',
   initial_count: '',
   hatch_date: '',
   arrival_date: '',
@@ -99,6 +102,7 @@ const labels = {
   update_house: 'Edit house',
   update_pen: 'Edit pen',
   update_batch: 'Edit batch',
+  delete_farm: 'Delete farm',
   move_birds: 'Move birds',
   record_mortality: 'Record mortality',
 }
@@ -196,13 +200,21 @@ export default function FarmManagement({
   const active = data.flocks.filter((f) => !f.archived_at)
   const archived = data.flocks.filter((f) => f.archived_at)
   const matching = (s) => String(s || '').toLowerCase().includes(query.toLowerCase().trim())
-  const set = (key, value) => setForm((f) => ({ ...f, [key]: value }))
+  const set = (key, value) => setForm((f) => {
+    if (key === 'category') {
+      const first = BREED_CATALOGUE.find(b => b.category === value)
+      return { ...f, category: value, breed: first?.name || '',
+        production_purpose: value === 'Layer' ? 'Eggs' : value === 'Breeder' ? 'Breeding' : value === 'Dual-purpose' ? 'Dual-purpose' : 'Meat' }
+    }
+    return { ...f, [key]: value }
+  })
 
   const open = (type, record = {}) => {
     setAction(type)
     setForm({
       ...blank,
       ...record,
+      breed: record.breed || (record.category && BREED_CATALOGUE.find(b => b.category === record.category)?.name) || blank.breed,
       source_pen_id: '',
       destination_pen_id: '',
       bird_count: '',
@@ -245,15 +257,12 @@ export default function FarmManagement({
           p_capacity: Number(payload.capacity),
         })
       else if (type === 'batch')
-        await rpc('add_farm_batch', {
+        await rpc('create_breed_aware_batch', {
           p_farm_id: farmId,
-          p_batch_number: payload.batch_number,
-          p_category: payload.category,
-          p_breed: payload.breed,
-          p_initial_count: Number(payload.initial_count),
-          p_hatch_date: payload.hatch_date || null,
-          p_arrival_date: payload.arrival_date || null,
+          p_data: payload,
         })
+      else if (type === 'update_batch')
+        await rpc('update_breed_aware_batch', { p_farm_id: farmId, p_data: payload })
       else {
         const result = await rpc('manage_farm', {
           p_farm_id: type === 'create_farm' ? null : farmId,
@@ -285,6 +294,20 @@ export default function FarmManagement({
       capacity: Number(form.capacity),
       initial_count: Number(form.initial_count),
     })
+  }
+
+  async function deleteFarm(record) {
+    if (!window.confirm(`Delete farm “${record.name}”? This is only allowed for an empty farm. All populated farms must be cleared through a separate, reviewed data-retention workflow.`)) return
+    if (window.prompt(`Type DELETE ${record.name} to confirm`) !== `DELETE ${record.name}`) return
+    if (saving) return
+    setSaving(true); setError(''); setNotice('')
+    try {
+      await rpc('delete_empty_farm', { p_farm_id: record.id })
+      if (farmId === record.id) onFarmChange?.(farms.find(f => f.id !== record.id)?.id || null)
+      await onFarmRefresh?.()
+      setNotice('Empty farm deleted.')
+    } catch(e) { setError(e.message || 'Could not delete farm.') }
+    finally { setSaving(false) }
   }
 
   async function destructive(type, record) {
@@ -457,20 +480,24 @@ export default function FarmManagement({
 
               {(action === 'batch' || action === 'update_batch') && (
                 <>
-                  <Input field="batch_number" label="Batch number" required />
+                  <Field label="Batch number">
+                    <input readOnly value={action === 'batch' ? 'Automatically assigned when saved' : form.batch_number || ''} />
+                  </Field>
                   {action === 'batch' && (
                     <>
-                      <Select
-                        field="category"
-                        label="Category"
-                        options={['Broiler', 'Layer'].map((x) => ({ value: x, label: x }))}
-                      />
                       <Input field="initial_count" label="Initial bird count" type="number" min="1" step="1" required />
                       <Input field="hatch_date" label="Hatch date" type="date" />
                       <Input field="arrival_date" label="Arrival date" type="date" />
                     </>
                   )}
-                  <Input field="breed" label="Breed" />
+                  <Select field="category" label="Production category" options={CATEGORY_OPTIONS} />
+                  <Select field="breed" label="Breed / strain"
+                    options={BREED_CATALOGUE.filter(b => b.category === form.category).map(b => ({ value: b.name, label: b.name }))} />
+                  <Select field="production_purpose" label="Production purpose"
+                    options={['Meat','Eggs','Dual-purpose','Breeding'].map(x => ({value:x,label:x}))} />
+                  <Select field="feed_form" label="Feed form"
+                    options={['Pellet','Mash','Crumble','Mixed','Other'].map(x => ({value:x,label:x}))} />
+                  <p className="inline-hint"><strong>MAAIF reference mapping:</strong> {getReferenceDescription(form.category, form.breed)}. Only verified category/strain benchmarks should be used for numerical alerts.</p>
                   <Input field="supplier" label="Supplier" />
                   <Input field="feeding_programme" label="Feeding programme" />
                 </>
@@ -553,6 +580,9 @@ export default function FarmManagement({
                     }}
                   >
                     Edit
+                  </button>
+                  <button type="button" className="button-secondary" disabled={saving} onClick={() => deleteFarm(f)}>
+                    Delete farm
                   </button>
                 </div>
               </article>
@@ -714,7 +744,7 @@ export default function FarmManagement({
                           <strong>{b?.batch_number || f.name}</strong>
                           <small>Initial: {fmt(b?.initial_count)}</small>
                         </td>
-                        <td>{b?.category || '—'}</td>
+                        <td>{b?.category || '—'}<small>{b?.breed || 'Breed not recorded'}</small></td>
                         <td>{locations.join(', ') || 'Unassigned'}</td>
                         <td>
                           <strong>{fmt(f.current_count)}</strong>
@@ -762,7 +792,7 @@ export default function FarmManagement({
 
       <div className="management-footnote">
         <span className="freshness-dot" /> Live counts decrease when mortality is recorded. Moves
-        update pen occupancy without changing flock totals. Archived flocks retain their records.
+        Update pen occupancy without changing flock totals. Archived flocks retain their records.
       </div>
     </div>
   )
