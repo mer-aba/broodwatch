@@ -34,101 +34,35 @@ function MetricCard({ item }) {
   )
 }
 
-function ConsumptionChart({ farmId, onNavigate }) {
-  const [entries, setEntries] = useState([])
-  const [feedError, setFeedError] = useState('')
-  const [range, setRange] = useState('7 days')
+function OperationsChart({ rows, onNavigate }) {
+  const [range, setRange] = useState(7)
+  const data = Array.from({length: range}, (_, i) => {
+    const day = daysAgoIso(range - 1 - i)
+    const records = rows.filter(r => r.record_date === day)
+    return { day: day.slice(5), feed: records.length ? records.reduce((a,r)=>a+number(r.feed_consumed_kg),0) : null, water: records.length ? records.reduce((a,r)=>a+number(r.water_consumed_l),0) : null }
+  })
+  return <section className="panel chart-panel"><div className="panel-heading"><div><p className="eyebrow">FLOCK OPERATIONS</p><h2>Feed & water consumption</h2><p className="subtle">Final daily records · selected scope</p><button className="text-link" onClick={()=>onNavigate?.('Feed & Water')}>Open feed & water →</button></div><select aria-label="Chart period" className="small-filter" value={range} onChange={e=>setRange(Number(e.target.value))}><option value={7}>7 days</option><option value={30}>30 days</option></select></div><div className="chart-legend"><span>Feed (kg) · left axis</span><span>Water (L) · right axis</span></div>{data.some(r=>r.feed!==null) ? <div style={{height:260,minWidth:0,width:'100%'}}><ResponsiveContainer width="100%" height="100%"><AreaChart data={data}><CartesianGrid vertical={false} strokeDasharray="3 4"/><XAxis dataKey="day" tick={{fontSize:11}}/><YAxis yAxisId="feed" width={42}/><YAxis yAxisId="water" orientation="right" width={42}/><Tooltip/><Area yAxisId="feed" name="Feed (kg)" dataKey="feed" stroke="#1c634e" fill="#1c634e" fillOpacity={0.12}/><Area yAxisId="water" name="Water (L)" dataKey="water" stroke="#d9a441" fill="#d9a441" fillOpacity={0.12}/></AreaChart></ResponsiveContainer></div>:<p className="subtle" style={{padding:20}}>No final daily records in this period.</p>}</section>
+}
 
-  useEffect(() => {
-    let active = true
-    setEntries([])
-    setFeedError('')
-    if (!farmId) return () => { active = false }
+function useOperations(farmId) {
+  const [state,setState]=useState({farmId:null,loading:true,errors:{},daily:[],eggs:[],events:[],tasks:[],alerts:[],environment:[]})
+  useEffect(()=>{
+    let alive=true
+    async function load(){
+      if(!farmId)return
+      const db=createClient(), today=daysAgoIso(0)
+      const queries={daily:db.from('daily_records').select('record_date,flock_id,pen_id,feed_consumed_kg,water_consumed_l').eq('farm_id',farmId).eq('status','final').gte('record_date',daysAgoIso(29)).lte('record_date',today),eggs:db.from('egg_collections').select('flock_id,pen_id,eggs_collected,damaged_eggs').eq('farm_id',farmId).eq('collection_date',today),events:db.from('flock_events').select('flock_id,source_pen_id,bird_count').eq('farm_id',farmId).eq('event_type','mortality').eq('event_date',today),tasks:db.from('bw_flock_tasks').select('id,activity,planned_on,kind').eq('farm_id',farmId).eq('status','planned').lte('planned_on',daysAgoIso(-7)).order('planned_on'),alerts:db.from('bw_anomaly_alerts').select('id,title,severity,area,status').eq('farm_id',farmId).in('status',['Open','Acknowledged']).order('created_at',{ascending:false}),environment:db.rpc('bw_environment_latest',{p_farm:farmId})}
+      const next={farmId,loading:false,errors:{}}
+      await Promise.all(Object.entries(queries).map(async ([key,q])=>{try{const {data,error}=await q;if(error)throw error;next[key]=data||[]}catch(e){next[key]=[];next.errors[key]=e.message||'Unable to load'}}))
+      if(alive)setState(next)
+    }
+    load();const timer=setInterval(load,30000);return()=>{alive=false;clearInterval(timer)}
+  },[farmId])
+  return state.farmId===farmId?state:{loading:true,errors:{},daily:[],eggs:[],events:[],tasks:[],alerts:[],environment:[]}
+}
 
-    createClient()
-      .from('feed_water_allocations')
-      .select('record_date,feed_consumed_kg,water_consumed_l')
-      .eq('farm_id', farmId)
-      .gte('record_date', daysAgoIso(35))
-      .order('record_date', { ascending: true })
-      .then(({ data, error }) => {
-        if (!active) return
-        if (error) setFeedError(error.message)
-        else setEntries(data || [])
-      })
-
-    return () => { active = false }
-  }, [farmId])
-
-  const days = range === '7 days' ? 7 : 30
-
-  const trendData = useMemo(
-    () => Array.from({ length: days }, (_, i) => {
-      const day = daysAgoIso(days - 1 - i)
-      const rows = entries.filter(r => r.record_date === day)
-      return {
-        day: day.slice(5),
-        feed: rows.reduce((a, r) => a + Number(r.feed_consumed_kg || 0), 0),
-        water: rows.reduce((a, r) => a + Number(r.water_consumed_l || 0), 0),
-      }
-    }),
-    [entries, days]
-  )
-
-  return (
-    <section className="panel chart-panel">
-      <div className="panel-heading">
-        <div>
-          <p className="eyebrow">FLOCK OPERATIONS</p>
-          <h2>Feed & water consumption</h2>
-          <button type="button" className="text-link" onClick={() => onNavigate?.('Feed & Water')}>
-            Open feed & water →
-          </button>
-          <p className="subtle">Daily totals · all active flocks</p>
-        </div>
-        <button
-          type="button"
-          className="select-button"
-          onClick={() => setRange(range === '7 days' ? '30 days' : '7 days')}
-        >
-          {range} <ChevronDown size={15} />
-        </button>
-      </div>
-      <div className="chart-legend">
-        <span><i className="legend-dot feed-dot" />Feed (kg)</span>
-        <span><i className="legend-dot water-dot" />Water (L)</span>
-      </div>
-      <div className="chart-wrap" style={{ minHeight: 220, position: 'relative' }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={trendData} margin={{ top: 8, right: 4, left: -18, bottom: 0 }}>
-            <defs>
-              <linearGradient id="feedFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#1c634e" stopOpacity={0.15} />
-                <stop offset="95%" stopColor="#1c634e" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="waterFill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#d9a441" stopOpacity={0.16} />
-                <stop offset="95%" stopColor="#d9a441" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid vertical={false} stroke="#e9ede6" strokeDasharray="3 4" />
-            <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#8b948a', fontSize: 11 }} />
-            <YAxis axisLine={false} tickLine={false} tick={{ fill: '#8b948a', fontSize: 11 }} />
-            <Tooltip contentStyle={{ borderRadius: 12, border: '1px solid #e6eae3', fontSize: 12 }} />
-            <Area type="monotone" dataKey="feed" stroke="#1c634e" strokeWidth={2.5} fill="url(#feedFill)" />
-            <Area type="monotone" dataKey="water" stroke="#d9a441" strokeWidth={2.5} fill="url(#waterFill)" />
-          </AreaChart>
-        </ResponsiveContainer>
-        {(feedError || entries.length === 0) && (
-          <p className="subtle" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', textAlign: 'center', padding: 24, pointerEvents: 'none' }}>
-            {feedError
-              ? `Feed and water records unavailable: ${feedError}`
-              : 'No feed or water allocations recorded yet.'}
-          </p>
-        )}
-      </div>
-    </section>
-  )
+function LivePanel({title,items,render,empty,error,loading,onOpen}){
+ return <section className="panel" style={{minWidth:0}}><div className="panel-heading"><h2>{title}</h2><button className="text-link" onClick={onOpen}>View all →</button></div><div style={{padding:'0 18px 18px',overflowWrap:'anywhere'}}>{loading?<p>Loading…</p>:error?<p role="alert">{error}</p>:items.length?items.slice(0,5).map(render):<p className="subtle">{empty}</p>}</div></section>
 }
 
 function FlockSummary({ flocks, batches, onNavigate }) {
@@ -285,7 +219,7 @@ function AlertsCard({ farmId, onNavigate, onAlertCountChange, onFeedAlertCountCh
         onCountChange={onFeedAlertCountChange}
       />
       <p className="subtle" style={{ padding: '0 20px 16px' }}>
-        Weight and feed/water alerts are monitored separately. Mortality and sensor sources are not connected here yet.
+        Weight and feed/water alerts are monitored separately. Anomaly and environmental records are shown separately below.
       </p>
     </section>
   )
@@ -342,7 +276,7 @@ function useFarmRecords(farmId) {
           houses: responses[0].data || [],
           pens: responses[1].data || [],
           batches: responses[2].data || [],
-          flocks: responses[3].data || [],
+          flocks: (responses[3].data || []).filter(f=>!f.archived_at),
           placements: responses[4].data || [],
         })
       } catch (err) {
@@ -391,7 +325,7 @@ function computeMetrics({ houses, flocks, placements, houseFilter, flockFilter, 
     : filteredPlacements.reduce((sum, placement) => {
         const flock = flocks.find(f => f.id === placement.flock_id)
         const totalPlaced = placementByFlock.get(placement.flock_id) || 0
-        return sum + (totalPlaced ? (number(placement.bird_count) * number(flock?.current_count)) / totalPlaced : 0)
+        return sum + number(placement.bird_count)
       }, 0)
 
   return {
@@ -408,7 +342,7 @@ function computeMetrics({ houses, flocks, placements, houseFilter, flockFilter, 
       {
         label: 'Live birds',
         value: formatNumber(Math.round(totalLive)),
-        note: 'Current flock counts · not yet linked to daily mortality',
+        note: 'Current registered population',
         icon: Activity,
         tone: 'gold',
       },
@@ -550,6 +484,7 @@ function DashboardFooter({ houses, pens, flocks, onNavigate }) {
 
 export default function Dashboard({ onNavigate, userName = 'Farmer', farm, farmId, farms = [], onFarmChange }) {
   const { records, loading, error } = useFarmRecords(farmId)
+  const ops = useOperations(farmId)
   const { houses, pens, batches, flocks, placements } = records
 
   const [showFarmMenu, setShowFarmMenu] = useState(false)
@@ -573,13 +508,19 @@ export default function Dashboard({ onNavigate, userName = 'Farmer', farm, farmI
     [houses, pens, flocks, placements, houseFilter, flockFilter, weightAlertCount, feedAlertCount]
   )
 
+  const scoped = (r, penKey='pen_id') => (flockFilter==='all'||r.flock_id===flockFilter)&&(houseFilter==='all'||pens.some(p=>p.id===r[penKey]&&p.house_id===houseFilter))
+  const daily = ops.daily.filter(r=>scoped(r))
+  const todayRows = daily.filter(r=>r.record_date===daysAgoIso(0))
+  const display = (key,rows,field,suffix='') => ops.loading||ops.errors[key]?'—':rows.length?formatNumber(Math.round(rows.reduce((a,r)=>a+number(r[field]),0)*100)/100)+suffix:'—'
+  const cards = [...metrics.slice(0,2),{label:'Deaths today',value:display('events',ops.events.filter(r=>scoped(r,'source_pen_id')),'bird_count'),note:'Recorded mortality events · — means no records or unavailable',icon:Activity,tone:'rose'},{label:'Eggs today',value:display('eggs',ops.eggs.filter(r=>scoped(r)),'eggs_collected'),note:'Egg collection register',icon:Bird,tone:'gold'},{label:'Feed consumed today',value:display('daily',todayRows,'feed_consumed_kg',' kg'),note:'Final daily records',icon:Wheat,tone:'sage'},{label:'Water consumed today',value:display('daily',todayRows,'water_consumed_l',' L'),note:'Final daily records',icon:Activity,tone:'green'},{label:'Active anomaly alerts',value:ops.loading||ops.errors.alerts?'—':formatNumber(ops.alerts.length),note:'Farm-wide · open and acknowledged',icon:CircleAlert,tone:'rose'}]
   const firstName = (userName || 'Farmer').trim().split(/\s+/)[0] || 'Farmer'
 
   if (loading) return <LoadingState />
   if (error) return <ErrorState error={error} />
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page bw-live-dashboard">
+      <style>{`.bw-live-dashboard{min-width:0}.bw-live-dashboard .metrics-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,185px),1fr));gap:14px}.bw-live-dashboard .dashboard-grid>*{min-width:0}.bw-live-dashboard .lower-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.bw-live-dashboard .filter-strip,.bw-live-dashboard .quick-actions{flex-wrap:wrap}.bw-live-dashboard .panel-heading{flex-wrap:wrap;gap:8px}.bw-live-dashboard .flock-info{min-width:0;overflow-wrap:anywhere}@media(max-width:760px){.bw-live-dashboard .dashboard-grid{display:grid;grid-template-columns:minmax(0,1fr)}.bw-live-dashboard .welcome-row{flex-direction:column;align-items:flex-start}.bw-live-dashboard .filter-strip{height:auto}.bw-live-dashboard .small-filter{max-width:100%}.bw-live-dashboard .metrics-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.bw-live-dashboard .metric-card{min-width:0;overflow-wrap:anywhere}}@media(max-width:360px){.bw-live-dashboard .metrics-grid{grid-template-columns:1fr}}`}</style>
       <DashboardHeader firstName={firstName} farm={farm} onNavigate={onNavigate} />
 
       <FilterStrip
@@ -598,11 +539,11 @@ export default function Dashboard({ onNavigate, userName = 'Farmer', farm, farmI
       />
 
       <section className="metrics-grid" aria-label="Farm metrics">
-        {metrics.map(item => <MetricCard key={item.label} item={item} />)}
+        {cards.map(item => <MetricCard key={item.label} item={item} />)}
       </section>
 
       <div className="dashboard-grid main-grid">
-        <ConsumptionChart farmId={farmId} onNavigate={onNavigate} />
+        <OperationsChart rows={daily} onNavigate={onNavigate} />
         <FlockSummary flocks={filteredFlocks} batches={batches} onNavigate={onNavigate} />
       </div>
 
@@ -613,7 +554,9 @@ export default function Dashboard({ onNavigate, userName = 'Farmer', farm, farmI
           onAlertCountChange={setWeightAlertCount}
           onFeedAlertCountChange={setFeedAlertCount}
         />
-        <TaskList onNavigate={onNavigate} />
+        <LivePanel title="Upcoming & overdue tasks" items={ops.tasks} loading={ops.loading} error={ops.errors.tasks} empty="No planned tasks due within seven days." onOpen={()=>onNavigate?.('Vaccination & Tasks')} render={r=><div key={r.id} style={{padding:'10px 0',borderBottom:'1px solid #e6eae3'}}><strong>{r.activity}</strong><p className="subtle">{r.planned_on} · {r.planned_on<daysAgoIso(0)?'Overdue':r.kind}</p></div>}/>
+        <LivePanel title="Farm anomaly alerts" items={ops.alerts} loading={ops.loading} error={ops.errors.alerts} empty="No open or acknowledged anomaly alerts." onOpen={()=>onNavigate?.('Anomaly Alerts')} render={r=><div key={r.id} style={{padding:'10px 0',borderBottom:'1px solid #e6eae3'}}><strong>{r.title}</strong><p className="subtle">{r.severity} · {r.area} · {r.status}</p></div>}/>
+        <LivePanel title="Latest environmental readings" items={ops.environment} loading={ops.loading} error={ops.errors.environment} empty="No environmental readings available." onOpen={()=>onNavigate?.('Live Environment')} render={(r,i)=><div key={r.device_id||i} style={{padding:'10px 0',borderBottom:'1px solid #e6eae3'}}><strong>{r.name||r.device_name||'Sensor '+(i+1)}</strong><p>{r.temperature??'—'} °C · {r.humidity??'—'}% RH</p><p className="subtle">{r.simulated?'Simulated':r.simulated===false?'Device reported':'Source unavailable'} · {r.received_at?new Date(r.received_at).toLocaleString():'No timestamp'}</p></div>}/>
         <AdvisoryCard onNavigate={onNavigate} />
       </div>
 
