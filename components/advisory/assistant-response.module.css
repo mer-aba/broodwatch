@@ -1,0 +1,10 @@
+.response {font-size:14px;line-height:1.7;overflow-wrap:anywhere;min-width:0}
+.response h1,.response h2,.response h3 {font-size:1.08em;font-weight:650;margin:1em 0 .4em}
+.response p {margin:.5em 0}
+.response ul,.response ol {padding-left:1.5em;margin:.6em 0;list-style-position:outside}
+.response ul {list-style-type:disc}.response ol {list-style-type:decimal}
+.response li {margin:.3em 0}
+.response table {display:block;overflow-x:auto;border-collapse:collapse;max-width:100%;margin:1em 0}
+.response td,.response th {padding:.5em;border:1px solid #94a3b866;text-align:left}
+.response blockquote {border-left:3px solid #16a34a;padding-left:1em;margin:.7em 0}
+.response pre {overflow-x:auto}
